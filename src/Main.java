@@ -31,6 +31,7 @@ class Task {
 class WorkerThread extends Thread {
     private final Queue<Task> taskQueue;
     private boolean running = true;
+    private boolean paused = false;
 
     public WorkerThread(Queue<Task> taskQueue) {
         this.taskQueue = taskQueue;
@@ -39,6 +40,17 @@ class WorkerThread extends Thread {
     @Override
     public void run() {
         while (running) {
+            synchronized (this) {
+                while (paused) {
+                    try {
+                        wait();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            }
+
             Task task = null;
             synchronized (taskQueue) {
                 while (taskQueue.isEmpty() && running) {
@@ -53,6 +65,7 @@ class WorkerThread extends Thread {
                     task = taskQueue.poll();
                 }
             }
+
             if (task != null) {
                 task.run();
             }
@@ -66,6 +79,15 @@ class WorkerThread extends Thread {
 
     public synchronized void setRunning(boolean status) {
         running = status;
+    }
+
+    public synchronized void pauseThread() {
+        paused = true;
+    }
+
+    public synchronized void resumeThread() {
+        paused = false;
+        notify();
     }
 }
 
@@ -114,6 +136,20 @@ class ThreadPool {
         }
     }
 
+    public synchronized boolean removeTask(int taskId) {
+        synchronized (taskQueue) {
+            Iterator<Task> iterator = taskQueue.iterator();
+            while (iterator.hasNext()) {
+                Task task = iterator.next();
+                if (task.getId() == taskId) {
+                    iterator.remove();
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     public synchronized void shutdown() {
         for (WorkerThread thread : threads) {
             thread.shutdown();
@@ -139,6 +175,20 @@ class ThreadPool {
         long duration = endTime - queueFullStartTime;
         if (duration > maxQueueFullTime) maxQueueFullTime = duration;
         if (duration < minQueueFullTime && duration > 0) minQueueFullTime = duration;
+    }
+
+    public void pauseAll() {
+        for (WorkerThread thread : threads) {
+            thread.pauseThread();
+        }
+        System.out.println("Thread pool paused.");
+    }
+
+    public void resumeAll() {
+        for (WorkerThread thread : threads) {
+            thread.resumeThread();
+        }
+        System.out.println("Thread pool resumed.");
     }
 
     public int getRejectedTasks() {
