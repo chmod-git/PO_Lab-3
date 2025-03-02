@@ -27,3 +27,44 @@ class Task {
         return id;
     }
 }
+
+class WorkerThread extends Thread {
+    private final Queue<Task> taskQueue;
+    private boolean running = true;
+
+    public WorkerThread(Queue<Task> taskQueue) {
+        this.taskQueue = taskQueue;
+    }
+
+    @Override
+    public void run() {
+        while (running) {
+            Task task = null;
+            synchronized (taskQueue) {
+                while (taskQueue.isEmpty() && running) {
+                    try {
+                        taskQueue.wait();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+                if (running) {
+                    task = taskQueue.poll();
+                }
+            }
+            if (task != null) {
+                task.run();
+            }
+        }
+    }
+
+    public synchronized void shutdown() {
+        running = false;
+        interrupt();
+    }
+
+    public synchronized void setRunning(boolean status) {
+        running = status;
+    }
+}
