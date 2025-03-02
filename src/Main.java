@@ -159,3 +159,42 @@ class ThreadPool {
         return total / waitTimes.size();
     }
 }
+
+public class Main {
+    public static void main(String[] args) throws InterruptedException {
+        int numThreads = 6;
+        int testDuration = 15_000;
+        int producerCount = 4;
+
+        ThreadPool threadPool = new ThreadPool(numThreads);
+        ExecutorService producers = Executors.newFixedThreadPool(producerCount);
+
+        long startTime = System.currentTimeMillis();
+        long endTime = startTime + testDuration;
+
+        for (int i = 0; i < producerCount; i++) {
+            producers.submit(() -> {
+                while (System.currentTimeMillis() < endTime) {
+                    Task task = new Task((int) (Math.random() * 1000));
+                    threadPool.submitTask(task);
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ignored) {
+                    }
+                }
+            });
+        }
+
+        producers.shutdown();
+        producers.awaitTermination(testDuration, TimeUnit.MILLISECONDS);
+
+        threadPool.shutdownAndExecute();
+
+        System.out.println("\n=== TEST RESULTS ===");
+        System.out.println("Total worker threads created: " + numThreads);
+        System.out.println("Average thread wait time: " + threadPool.getAverageWaitTime() + " ns");
+        System.out.println("Max queue full time: " + threadPool.getMaxQueueFullTime() + " ms");
+        System.out.println("Min queue full time: " + threadPool.getMinQueueFullTime() + " ms");
+        System.out.println("Total rejected tasks: " + threadPool.getRejectedTasks());
+    }
+}
