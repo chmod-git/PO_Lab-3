@@ -68,3 +68,94 @@ class WorkerThread extends Thread {
         running = status;
     }
 }
+
+class ThreadPool {
+    private final WorkerThread[] threads;
+    private final Queue<Task> taskQueue;
+    private long maxQueueFullTime = 0;
+    private long minQueueFullTime = Long.MAX_VALUE;
+    private static long queueFullStartTime = 0;
+    private boolean flag = false;
+    private int rejectedTasks = 0;
+    private final List<Long> waitTimes = new ArrayList<>();
+
+    public ThreadPool(int nThreads) {
+        this.threads = new WorkerThread[nThreads];
+        this.taskQueue = new LinkedList<>();
+
+        for (int i = 0; i < nThreads; i++) {
+            threads[i] = new WorkerThread(taskQueue);
+            threads[i].start();
+        }
+    }
+
+    public synchronized void submitTask(Task task) {
+        synchronized (taskQueue) {
+            long submitStart = System.nanoTime();
+            if (taskQueue.size() >= 20) {
+                rejectedTasks++;
+                if (!flag) {
+                    queueFullStartTime = System.currentTimeMillis();
+                    flag = true;
+                }
+                return;
+            }
+
+            if (flag && taskQueue.size() < 20) {
+                flag = false;
+                updateQueueFullTime();
+            }
+
+            taskQueue.offer(task);
+            taskQueue.notify();
+
+            long submitEnd = System.nanoTime();
+            waitTimes.add(submitEnd - submitStart);
+        }
+    }
+
+    public synchronized void shutdown() {
+        for (WorkerThread thread : threads) {
+            thread.shutdown();
+        }
+    }
+
+    public synchronized void shutdownAndExecute() {
+        for (WorkerThread thread : threads) {
+            thread.setRunning(false);
+        }
+        taskQueue.clear();
+
+        for (WorkerThread thread : threads) {
+            try {
+                thread.join();
+            } catch (InterruptedException ignored) {
+            }
+        }
+    }
+
+    private void updateQueueFullTime() {
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - queueFullStartTime;
+        if (duration > maxQueueFullTime) maxQueueFullTime = duration;
+        if (duration < minQueueFullTime && duration > 0) minQueueFullTime = duration;
+    }
+
+    public int getRejectedTasks() {
+        return rejectedTasks;
+    }
+
+    public long getMaxQueueFullTime() {
+        return maxQueueFullTime;
+    }
+
+    public long getMinQueueFullTime() {
+        return minQueueFullTime;
+    }
+
+    public long getAverageWaitTime() {
+        if (waitTimes.isEmpty()) return 0;
+        long total = waitTimes.stream().mapToLong(Long::longValue).sum();
+        return total / waitTimes.size();
+    }
+}
