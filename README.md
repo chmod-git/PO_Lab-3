@@ -1,1 +1,1 @@
-Parallel Calculations laboratory work #1
+Parallel Calculations laboratory work #2
