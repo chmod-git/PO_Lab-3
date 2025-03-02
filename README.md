@@ -1,1 +1,1 @@
-# PO_Lab-2
+Parallel Calculations laboratory work #1
