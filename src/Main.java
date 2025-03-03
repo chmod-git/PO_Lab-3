@@ -143,6 +143,10 @@ class ThreadPool {
                 Task task = iterator.next();
                 if (task.getId() == taskId) {
                     iterator.remove();
+                    if (flag && taskQueue.size() < 20) {
+                        flag = false;
+                        updateQueueFullTime();
+                    }
                     return true;
                 }
             }
